@@ -13,8 +13,8 @@ my_port = int(sys.argv[1])      # port number
 timeout = int(sys.argv[2])      # timeout
 dv = {}                         # dictionary for distance vector
 neighbors = {}                  # dictionary to hold neighbors and time since last message from them
-linked_down_nodes = {}          # dictionary for linked_down_nodes
-deactivated_links = {}          # dictionary for nodes that have sent a LINKED_DOWN msg to me
+linked_down_nodes = {}          # dictionary for linked_down_nodes, so I can keep track of neighbors when they're linked down and restore them as neighbors when they're linked up
+deactivated_links = {}          # dictionary for nodes that have sent a LINKED_DOWN msg to me, so I can restore when I get a linkup
 next_arg = 3                    # arguments after argv[2] come in triplets
 number_neighbors = (len(sys.argv[3:]))/3
 start = time.time()
@@ -36,7 +36,7 @@ while(next_arg/3 <= number_neighbors):
 #=====MESSAGES========================================================
 # function that sends distance vector to neighbors
 def ROUTE_UPDATE():
-    print "Sending Route Update"
+    # print "Sending Route Update"
     # message will be ROUTE_UPDATE + ip + port + dv
     msg = "ROUTE_UPDATE" + " " + source[0] + " " + str(source[1]) + " "
     for v in dv:
@@ -57,8 +57,7 @@ def LINK_DOWN(node):
 #====================================================================
 def LINK_UP(node):
     print "SENDING LINKUP"
-    msg = "LINK_UP" + " " + source[0] + " " + str(source[1]) + " "
-    msg += dv[node]
+    msg = "LINKUP" + " " + source[0] + " " + str(source[1]) + " "
     sending_socket.sendto(msg, (node[0], node[1]))
 #====================================================================
 # thread function --> checks time to see if it has been more than timeout since last message
@@ -116,7 +115,9 @@ while nodeActive:
                 print command
                 command = command.split()
                 print command[0]
-                if command[0] == "LINKDOWN" and len(command) > 2:
+                if command[0] == "LINKDOWN":
+                #TODO RETURNand len(command) > 2:
+
                     # command_ip = command[1] # IP address
                     # command_port = int(command[2]) # Port
                     # FOR TESTING PURPOSES TODO change back
@@ -124,6 +125,7 @@ while nodeActive:
                     command_port = neighbor_port
                     node = (command_ip, command_port)
                     if node in neighbors:
+                        print "Neighbor"
                         dv[node] = float("inf")
                         linked_down_nodes[node] = dv[node]
                     else:
@@ -135,9 +137,10 @@ while nodeActive:
                         del neighbors[node]
                         LINK_DOWN(node)
                         ROUTE_UPDATE()
-                elif command[0] == "LINKUP" and len(command) > 2:
-                    print command[1]
-                    print command[2]
+                elif command[0] == "LINKUP":
+                #TODO return and len(command) > 2:
+                    # print command[1]
+                    # print command[2]
                     # command_ip = command[1] # IP address
                     # command_port = int(command[2]) # Port
                     # FOR TESTING PURPOSES TODO change back
@@ -153,8 +156,7 @@ while nodeActive:
                             # send linkup message to neighbor
                             LINK_UP(node)
                 elif command[0] == "CLOSE":
-                    print "test"
-                    print "Close"
+                    print "Node shutting down"
                     nodeActive = False
                 else:
                     print command[0] + "Command not recognized"
@@ -162,8 +164,8 @@ while nodeActive:
                 # update neighbor time if message received from neighbor
                 # if distance vector changes or timeout is reached, resend
                 data = s.recv(1024)
-                print "Received Message: "
-                print data
+                # print "Received Message: "
+                # print data
                 data = data.split()
                 # when receiving distance vector, check to see if there are any nodes that
                 # are not in current dv. If there's a new node, add it to dv and send ROUTE_UPDATE
@@ -192,11 +194,12 @@ while nodeActive:
                             # check to see if there is a node that is not yet in the dv
                             # if there isn't then add it
                             dv[node] = new_dv[node]
-                    print "NEW DV: "
-                    print new_dv
+                    # print "NEW DV: "
+                    # print new_dv
                 # elif data[0] == "CLOSE":
                 #     print "CLOSE"
                 elif data[0] == "LINKUP":
+                    print "LINKUP"
                     sender = (data[1], int(data[2])) # sender ip, port
                     if(dv[sender] == float("inf")):
                         if(deactivated_links[sender] is not None):
@@ -225,6 +228,6 @@ while nodeActive:
         if e.errno != errno.EAGAIN:
             raise e
         print "blocking with", len(buf), "remaining"
-        select.select([], [sock], [])
+        select.select([], [input], [])
         print "unblocked"
 thread1.join()
