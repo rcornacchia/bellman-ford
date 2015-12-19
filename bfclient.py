@@ -8,12 +8,13 @@ import time
 time_since_last_message = time.time()
 my_ip = socket.gethostbyname(socket.gethostname())
 node = namedtuple("node", ["ip", "port"])
-my_port = int(sys.argv[1])     # port number
-timeout = int(sys.argv[2])    # timeout
-next_arg = 3 # arguments after argv[2] come in triplets
-dv = {} # dictionary for distance vector
-neighbors = {}
-linked_down_nodes = {}
+my_port = int(sys.argv[1])      # port number
+timeout = int(sys.argv[2])      # timeout
+dv = {}                         # dictionary for distance vector
+neighbors = {}                  # dictionary for neighbor nodes
+linked_down_nodes = {}          # dictionary for linked_down_nodes
+deactivated_links = {}          # dictionary for nodes that have sent a LINKED_DOWN msg
+next_arg = 3                    # arguments after argv[2] come in triplets
 number_neighbors = (len(sys.argv[3:]))/3
 start = time.time()
 source = node(my_ip, my_port)
@@ -45,13 +46,14 @@ def ROUTE_UPDATE():
         #reset timer
         time_since_last_message = time.time()
         # message should include the port number from the source
-        print dv
+        print dv[node]
 def LINK_DOWN(node):
     msg = "LINK_DOWN" + " " + source[0] + " " + str(source[1]) + " "
-    msg += node[0] + " " str(node[1])
+    sending_socket.sendto(msg, (node[0], node[1]))
 def LINK_UP(node):
     msg = "LINK_DOWN" + " " + source[0] + " " + str(source[1]) + " "
-    msg += node[0] + " " str(node[1])
+    msg += node[0] + " " str(node[1]) + dv[node]
+    sending_socket.sendto(msg, (node[0], node[1]))
 #====================================================================
 # thread function --> checks time to see if it has been more than timeout since last message
 # if it has been, then add message to write, so that select will be called
@@ -133,8 +135,8 @@ while True:
                         #change dv
                         if node in dv:
                             dv[node] = linked_down_nodes[node]
-                        # send linkup message to neighbor
-                        LINK_UP(node)
+                            # send linkup message to neighbor
+                            LINK_UP(node)
                 elif command[0] == "CLOSE":
                     s.close()
                     exit()
