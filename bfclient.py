@@ -12,6 +12,7 @@ node = namedtuple("node", ["ip", "port"])
 my_port = int(sys.argv[1])      # port number
 timeout = int(sys.argv[2])      # timeout
 dv = {}                         # dictionary for distance vector
+predecessor = {}                # dictionary to store the link with the lowest route
 neighbors = {}                  # dictionary to hold neighbors and time since last message from them
 linked_down_nodes = {}          # dictionary for linked_down_nodes, so I can keep track of neighbors when they're linked down and restore them as neighbors when they're linked up
 deactivated_links = {}          # dictionary for nodes that have sent a LINKED_DOWN msg to me, so I can restore when I get a linkup
@@ -31,6 +32,7 @@ while(next_arg/3 <= number_neighbors):
     neighbor_weight = sys.argv[next_arg + 2]            # weight
     neighbor = (neighbor_ip, neighbor_port)         # add neighbor to list of neighbors
     dv[neighbor] = neighbor_weight
+    predecessor[neighbor] = neighbor
     neighbors[neighbor] = start
     next_arg += 3
 #=====MESSAGES========================================================
@@ -172,8 +174,8 @@ while nodeActive:
                 if data[0] == "ROUTE_UPDATE":
                     temp_ip = data[1]
                     temp_port = int(data[2])
-                    print temp_ip
-                    print temp_port
+                    # print temp_ip
+                    # print temp_port
                     sender = temp_ip, temp_port # sender ip, port
                     neighbors[sender] = time.time()
                     size_of_dv = len(data[3:])/3
@@ -188,12 +190,15 @@ while nodeActive:
                         if node in dv:
                             if dv[node] == float("inf") and new_dv[node] != float("inf"):
                                 dv[node] = new_dv
+                                predecessor[node] = [temp_ip, temp_port]
                             elif new_dv[node] < dv[node]:
                                 dv[node] = new_dv[node]
+                                predecessor[node] = [temp_ip, temp_port]
                         else:
                             # check to see if there is a node that is not yet in the dv
                             # if there isn't then add it
                             dv[node] = new_dv[node]
+                            predecessor[node] = [temp_ip, temp_port]
                     # print "NEW DV: "
                     # print new_dv
                 # elif data[0] == "CLOSE":
