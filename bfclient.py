@@ -73,7 +73,7 @@ class myThread (threading.Thread):
                 print "still time"
             time.sleep(1)
 #====================================================================
-# spawn thread to handle timeout
+# spawn thread to handle time checking
 # thread1 = myThread()
 # thread1.start()
 #====================================================================
