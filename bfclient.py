@@ -19,6 +19,7 @@ def ROUTE_UPDATE():
     for neighbor in neighbors:
         # send dv
         time_since_last_message = time.time()
+        # message should include the port number from the
         print dv
 
 # thread function --> checks time to see if it has been more than timeout since last message
@@ -33,9 +34,18 @@ class myThread (threading.Thread):
             now = time.time()
             print now - time_since_last_message
             print timeout
-
+            nodes_to_remove = []
+            # check neighbors to see if any of the time has passed timeout*3
+            for neighbor in neighbors:
+                if(now - neighbors[neighbor] > timeout * 3):
+                    # remove neighbor
+                    nodes_to_remove.append(neighbor)
+            for node in nodes_to_remove:
+                del dv[node]
+                del neighbors[node]
+                ROUTE_UPDATE()
             if (now - time_since_last_message > timeout):
-                print "Time's up" + dv
+                print "Time's up"
                 ROUTE_UPDATE()
             else:
                 print "still time"
@@ -55,6 +65,7 @@ if(len(sys.argv[3:])%3 != 0):
     exit()
 number_neighbors = (len(sys.argv[3:]))/3
 
+start = time.time()
 while(next_arg/3 <= number_neighbors):
     neighbor_ip = sys.argv[next_arg]            # ip address
     neighbor_port = sys.argv[next_arg + 1]      # port number
@@ -63,7 +74,7 @@ while(next_arg/3 <= number_neighbors):
 
     neighbor = Neighbor(neighbor_ip, neighbor_port)
     dv[neighbor] = neighbor_weight
-    neighbors[neighbor] = neighbor_weight
+    neighbors[neighbor] = start
     next_arg += 3
 
 #spawn thread to handle timeout
@@ -79,10 +90,6 @@ input = [s, sys.stdin]
 while True:
     # if distance vector changes or timeout is reached, resend
     ROUTE_UPDATE()
-
-    # when receiving distance vector, check to see if there are any nodes that
-    # are not in current dv
-
     try:
         inputready,outputready,exceptready = select.select(input,[],[])
         for s in inputready:
@@ -95,14 +102,18 @@ while True:
                 # handle standard input
                 command = sys.stdin.readline()
                 print command
-            #
             # else:
             # handle all other sockets
             else:
+                # update neighbor time if message received from neighbor
                 data = s.recv(1024)
-                if data:
+                if data[0] == "ROUTE_UPDATE":
                     print data
                     # s.send(data)
+
+                    # when receiving distance vector, check to see if there are any nodes that
+                    # are not in current dv. If there's a new node, add it to dv and send ROUTE_UPDATE
+
                 else:
                     s.close()
                     input.remove(s)
@@ -114,7 +125,6 @@ while True:
         print "unblocked"
 
 
-    # use select to avoid busy waiting
-    # result = select.select([sock],[],[])
-    # data = result[0][0].recv(1024)
-    # print "received message:", data
+
+
+MESSAGE will be SOURCE IP + dv
