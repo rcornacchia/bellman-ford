@@ -1,20 +1,18 @@
 import sys
 import socket
+from collections import namedtuple
 
-class Neighbor:
-    def __init__(ip, port, weight):
-        self.ip_address = ip
-        self.port = port
-        self.weight = weight
 
-# executable name
-# sys.argv[0]
-
+def send_dv(x):
+    print dv
 my_ip = socket.gethostbyname(socket.gethostname())
 print my_ip
 
+
+Neighbor = namedtuple("Neighbor", ["ip", "port"])
+
 # port number
-my_port =  sys.argv[1]
+my_port =  int(sys.argv[1])
 
 # timeout
 my_timeout = sys.argv[2]
@@ -22,14 +20,44 @@ my_timeout = sys.argv[2]
 # arguments after argv[2] come in triplets
 next_arg = 3
 
+# dictionary for neighbors
+
+# dictionary for distance vector
+dv = {}
+
+if(len(sys.argv[3:])%3 != 0):
+    print "incorrect usage, neighbors should be listed by ip address, port, and weight"
+    exit()
 number_neighbors = (len(sys.argv[3:]))/3
 
 while(next_arg/3 <= number_neighbors):
-    neighbor = Neighbor()
     # ip address
-    neighbor.ip_address = sys.argv[next_arg]
+    neighbor_ip = sys.argv[next_arg]
     # port number
-    neighbor.port = sys.argv[next_arg + 1]
+    neighbor_port = sys.argv[next_arg + 1]
     # weight
-    neighbor.weight = sys.argv[next_arg + 2]
-    print neighbor
+    neighbor_weight = sys.argv[next_arg + 2]
+    neighbor = Neighbor(neighbor_ip, neighbor_port)
+    dv[neighbor] = neighbor_weight
+    next_arg += 3
+
+
+# print dv
+
+
+
+
+print my_ip
+print my_port
+
+# receive on socket end
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind((my_ip, my_port))
+
+while True:
+    send_dv(dv)
+
+    data, addr = sock.recvfrom(1024)
+    print "received message:", data
+
+    # if distance vector changes or timeout is reached, resend
