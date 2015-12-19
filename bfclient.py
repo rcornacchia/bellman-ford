@@ -4,6 +4,7 @@ import select
 from collections import namedtuple
 import threading
 import time
+import os
 
 time_since_last_message = time.time()
 my_ip = socket.gethostbyname(socket.gethostname())
@@ -11,13 +12,14 @@ node = namedtuple("node", ["ip", "port"])
 my_port = int(sys.argv[1])      # port number
 timeout = int(sys.argv[2])      # timeout
 dv = {}                         # dictionary for distance vector
-neighbors = {}                  # dictionary for neighbor nodes
+neighbors = {}                  # dictionary to hold neighbors and time since last message from them
 linked_down_nodes = {}          # dictionary for linked_down_nodes
-deactivated_links = {}          # dictionary for nodes that have sent a LINKED_DOWN msg
+deactivated_links = {}          # dictionary for nodes that have sent a LINKED_DOWN msg to me
 next_arg = 3                    # arguments after argv[2] come in triplets
 number_neighbors = (len(sys.argv[3:]))/3
 start = time.time()
-source = node(my_ip, my_port)
+source = (my_ip, my_port)
+nodeActive = True
 #====================================================================
 # Get neighbors from command line
 if(len(sys.argv[3:])%3 != 0):
@@ -27,13 +29,14 @@ while(next_arg/3 <= number_neighbors):
     neighbor_ip = sys.argv[next_arg]                    # ip address
     neighbor_port = int(sys.argv[next_arg + 1])         # port number
     neighbor_weight = sys.argv[next_arg + 2]            # weight
-    neighbor = node(neighbor_ip, neighbor_port)         # add neighbor to list of neighbors
+    neighbor = (neighbor_ip, neighbor_port)         # add neighbor to list of neighbors
     dv[neighbor] = neighbor_weight
     neighbors[neighbor] = start
     next_arg += 3
 #=====MESSAGES========================================================
 # function that sends distance vector to neighbors
 def ROUTE_UPDATE():
+    print "Sending Route Update"
     # message will be ROUTE_UPDATE + ip + port + dv
     msg = "ROUTE_UPDATE" + " " + source[0] + " " + str(source[1]) + " "
     for v in dv:
@@ -46,14 +49,15 @@ def ROUTE_UPDATE():
         #reset timer
         time_since_last_message = time.time()
         # message should include the port number from the source
-        print dv[node]
 #====================================================================
 def LINK_DOWN(node):
-    msg = "LINK_DOWN" + " " + source[0] + " " + str(source[1]) + " "
+    print "SENDING LINKDOWN"
+    msg = "LINKDOWN" + " " + source[0] + " " + str(source[1]) + " "
     sending_socket.sendto(msg, (node[0], node[1]))
 #====================================================================
 def LINK_UP(node):
-    msg = "LINK_DOWN" + " " + source[0] + " " + str(source[1]) + " "
+    print "SENDING LINKUP"
+    msg = "LINK_UP" + " " + source[0] + " " + str(source[1]) + " "
     msg += dv[node]
     sending_socket.sendto(msg, (node[0], node[1]))
 #====================================================================
@@ -62,11 +66,12 @@ def LINK_UP(node):
 # Function also tests to see if neighbors have been not messaged in 3 * timeout seconds
 class myThread (threading.Thread):
     def __init__(self, start_time):
-        time_since_last_message = start_time
         threading.Thread.__init__(self)
+        self.process = None
+        time_since_last_message = start_time
     def run(self):
         time_since_last_message = time.time()
-        while True:
+        while nodeActive:
             # print "Thread started"
             now = time.time()
             # print now - time_since_last_message
@@ -85,8 +90,6 @@ class myThread (threading.Thread):
             if (now - time_since_last_message > timeout):
                 time_since_last_message = time.time()
                 ROUTE_UPDATE()
-            # else:
-            #     print "still time"
             time.sleep(1)
 #====================================================================
 # spawn thread to handle time checking
@@ -98,8 +101,9 @@ sending_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receiving_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receiving_socket.bind((my_ip, my_port))
 input = [receiving_socket, sys.stdin]
+output = [sys.stdin]
 #====================================================================
-while True:
+while nodeActive:
     try:
         inputready,outputready,exceptready = select.select(input,[],[])
         for s in inputready:
@@ -108,32 +112,38 @@ while True:
             #     client, address = server.accept()
             #     input.append(client)
             if s == sys.stdin:
-                print "test"
-
                 command = sys.stdin.readline()
                 print command
                 command = command.split()
                 print command[0]
-                if command[0] == "LINKDOWN":
-                    command_ip = command[1] # IP address
-                    command_port = int(command[2]) # Port
-                    node = node(command_ip, command_port)
+                if command[0] == "LINKDOWN" and len(command) > 2:
+                    # command_ip = command[1] # IP address
+                    # command_port = int(command[2]) # Port
+                    # FOR TESTING PURPOSES TODO change back
+                    command_ip = neighbor_ip
+                    command_port = neighbor_port
+                    node = (command_ip, command_port)
                     if node in neighbors:
                         dv[node] = float("inf")
                         linked_down_nodes[node] = dv[node]
+                    else:
+                        print "Node is not a neighbor, can't Linkdown"
+                        # send linkdown message to neighbor
+                        # update neighbor's distance vector to infinity
                     # remove node from list of neighbors
                     for node in linked_down_nodes:
                         del neighbors[node]
-                    else:
-                        print "Node is not a neighbor, can't Linkdown"
-                        ROUTE_UPDATE()
-                        # send linkdown message to neighbor
                         LINK_DOWN(node)
-                        # update neighbor's distance vector to infinity
-                elif command[0] == "LINKUP":
-                    command_ip = command[1] # IP address
-                    command_ip = int(command[2]) # Port
-                    node = node(command_ip, command_port)
+                        ROUTE_UPDATE()
+                elif command[0] == "LINKUP" and len(command) > 2:
+                    print command[1]
+                    print command[2]
+                    # command_ip = command[1] # IP address
+                    # command_port = int(command[2]) # Port
+                    # FOR TESTING PURPOSES TODO change back
+                    command_ip = neighbor_ip
+                    command_port = neighbor_port
+                    node = (command_ip, command_port)
                     if node not in neighbors:
                         #add it back to neighbors
                         neighbors[node] = time.time()
@@ -143,18 +153,18 @@ while True:
                             # send linkup message to neighbor
                             LINK_UP(node)
                 elif command[0] == "CLOSE":
-                    s.close()
-                    exit()
+                    print "test"
                     print "Close"
+                    nodeActive = False
                 else:
                     print command[0] + "Command not recognized"
             else:
                 # update neighbor time if message received from neighbor
                 # if distance vector changes or timeout is reached, resend
                 data = s.recv(1024)
+                print "Received Message: "
                 print data
                 data = data.split()
-                print data[0]
                 # when receiving distance vector, check to see if there are any nodes that
                 # are not in current dv. If there's a new node, add it to dv and send ROUTE_UPDATE
                 if data[0] == "ROUTE_UPDATE":
@@ -166,7 +176,6 @@ while True:
                     neighbors[sender] = time.time()
                     size_of_dv = len(data[3:])/3
                     counter = 3
-                    print "TEST"
                     new_dv = {}
                     while(counter < size_of_dv+3):
                         new_dv[data[counter], data[counter+1]] = data[counter+2] # ip address, port, weight
@@ -188,7 +197,7 @@ while True:
                 # elif data[0] == "CLOSE":
                 #     print "CLOSE"
                 elif data[0] == "LINKUP":
-                    sender = node(data[1], int(data[2])) # sender ip, port
+                    sender = (data[1], int(data[2])) # sender ip, port
                     if(dv[sender] == float("inf")):
                         if(deactivated_links[sender] is not None):
                             dv[sender] = deactivated_links[sender]
@@ -197,14 +206,14 @@ while True:
                             ROUTE_UPDATE()
                             print "LINK RESTORED"
                 elif data[0] == "LINKDOWN":
-                    sender = node(data[1], int(data[2])) # sender ip, port
+                    sender = (data[1], int(data[2])) # sender ip, port
                     deactivated_links[sender] = dv[sender]
                     dv[sender] = float("inf");
                     del neighbors[sender]
                     ROUTE_UPDATE
                     print "LINK DEACTIVATED"
                 # elif data[0] == "SHOW_RT":
-                #     sender = node(data[1], int(data[2])) # sender ip, port
+                #     sender = (data[1], int(data[2])) # sender ip, port
                 #     print "SHOW_RT"
                 elif data[0] is not None:
                     print "Unrecognized message received: "
@@ -218,3 +227,4 @@ while True:
         print "blocking with", len(buf), "remaining"
         select.select([], [sock], [])
         print "unblocked"
+thread1.join()
