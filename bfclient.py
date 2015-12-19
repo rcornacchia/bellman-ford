@@ -23,9 +23,9 @@ if(len(sys.argv[3:])%3 != 0):
     exit()
 while(next_arg/3 <= number_neighbors):
     neighbor_ip = sys.argv[next_arg]                    # ip address
-    neighbor_port = sys.argv[next_arg + 1]              # port number
+    neighbor_port = int(sys.argv[next_arg + 1])         # port number
     neighbor_weight = sys.argv[next_arg + 2]            # weight
-    neighbor = node(neighbor_ip, neighbor_port)     # add neighbor to list of neihbors
+    neighbor = node(neighbor_ip, neighbor_port)         # add neighbor to list of neighbors
     dv[neighbor] = neighbor_weight
     neighbors[neighbor] = start
     next_arg += 3
@@ -33,11 +33,14 @@ while(next_arg/3 <= number_neighbors):
 # function that sends distance vector to neighbors
 def ROUTE_UPDATE():
     # message will be ROUTE_UPDATE + [ip, port] + dv
-    msg = ["ROUTE_UPDATE", source, dv]
+    msg = "ROUTE_UPDATE" + " " + source[0] + " " + str(source[1]) + " "
+    for v in dv:
+        msg += v[0] + " " + str(v[1]) + " " + dv[v]
+    msg += " EOT"
     # iterate through list of neighbors
     for neighbor in neighbors:
         # send message to each neighbor
-        sending_socket.sendto()
+        sending_socket.sendto(msg, (neighbor[0], neighbor[1]))
         #reset timer
         time_since_last_message = time.time()
         # message should include the port number from the source
@@ -47,14 +50,16 @@ def ROUTE_UPDATE():
 # if it has been, then add message to write, so that select will be called
 # Function also tests to see if neighbors have been not messaged in 3 * timeout seconds
 class myThread (threading.Thread):
-    def __init__(self):
+    def __init__(self, start_time):
+        time_since_last_message = start_time
         threading.Thread.__init__(self)
     def run(self):
+        time_since_last_message = time.time()
         while True:
             # print "Thread started"
             now = time.time()
-            print now - time_since_last_message
-            print timeout
+            # print now - time_since_last_message
+            # print timeout
             nodes_to_remove = []
             # check neighbors to see if any of the time has passed timeout*3
             for neighbor in neighbors:
@@ -67,15 +72,15 @@ class myThread (threading.Thread):
                 ROUTE_UPDATE()
             # Check to see if last message sent is inside the timeout window
             if (now - time_since_last_message > timeout):
-                print "Time's up"
+                time_since_last_message = time.time()
                 ROUTE_UPDATE()
-            else:
-                print "still time"
+            # else:
+            #     print "still time"
             time.sleep(1)
 #====================================================================
 # spawn thread to handle time checking
-# thread1 = myThread()
-# thread1.start()
+thread1 = myThread(time_since_last_message)
+thread1.start()
 #====================================================================
 # Create two sockets
 sending_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -114,19 +119,35 @@ while True:
                 # update neighbor time if message received from neighbor
                 # if distance vector changes or timeout is reached, resend
                 data = s.recv(1024)
+                print data
+                data = data.split()
+                print data[0]
                 # when receiving distance vector, check to see if there are any nodes that
                 # are not in current dv. If there's a new node, add it to dv and send ROUTE_UPDATE
                 if data[0] == "ROUTE_UPDATE":
-                    print data
-                    # s.send(data)
+                    sender = node(data[1], int(data[2])) # sender ip, port
+                    neighbors[sender] = time.time()
+                    size_of_dv = len(data[3:])/3
+                    counter = 3
+                    new_dv = {}
+                    while(counter < size_of_dv+3):
+                        new_dv[data[counter], data[counter+1]] = data[counter+2] # ip address, port, weight
+                        counter += 3
+                    print "NEW DV: "
+                    print new_dv
+
+                # s.send(data)
                 elif data[0] == "CLOSE":
                     print "CLOSE"
                 elif data[0] == "LINKUP":
                     print "linkup"
                 elif data[0] == "LINKDOWN":
-
+                    print "linkdown"
                 elif data[0] == "SHOW_RT":
                     print "SHOW_RT"
+                elif data[0] is not None:
+                    print "Unrecognized message received: "
+                    print data
                 else:
                     s.close()
                     input.remove(s)
