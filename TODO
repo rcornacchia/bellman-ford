@@ -2,3 +2,5 @@ have 2 clients connecting and updating each other
     on update, change the timestamp since the last message for the neighbors, so they're not removed
 implement bellman-ford updating
 implement commands
+describe protocol in README
+%> command prompt
