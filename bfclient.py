@@ -13,6 +13,7 @@ timeout = int(sys.argv[2])    # timeout
 next_arg = 3 # arguments after argv[2] come in triplets
 dv = {} # dictionary for distance vector
 neighbors = {}
+linked_down_nodes = {}
 number_neighbors = (len(sys.argv[3:]))/3
 start = time.time()
 source = node(my_ip, my_port)
@@ -29,7 +30,7 @@ while(next_arg/3 <= number_neighbors):
     dv[neighbor] = neighbor_weight
     neighbors[neighbor] = start
     next_arg += 3
-#====================================================================
+#=====MESSAGES========================================================
 # function that sends distance vector to neighbors
 def ROUTE_UPDATE():
     # message will be ROUTE_UPDATE + [ip, port] + dv
@@ -45,6 +46,12 @@ def ROUTE_UPDATE():
         time_since_last_message = time.time()
         # message should include the port number from the source
         print dv
+def LINK_DOWN(node):
+    msg = "LINK_DOWN" + " " + source[0] + " " + str(source[1]) + " "
+    msg += node[0] + " " str(node[1])
+def LINK_UP(node):
+    msg = "LINK_DOWN" + " " + source[0] + " " + str(source[1]) + " "
+    msg += node[0] + " " str(node[1])
 #====================================================================
 # thread function --> checks time to see if it has been more than timeout since last message
 # if it has been, then add message to write, so that select will be called
@@ -67,7 +74,8 @@ class myThread (threading.Thread):
                     # remove neighbor
                     nodes_to_remove.append(neighbor)
             for node in nodes_to_remove:
-                del dv[node]
+                dv[node] = float("inf")
+                print dv
                 del neighbors[node]
                 ROUTE_UPDATE()
             # Check to see if last message sent is inside the timeout window
@@ -101,14 +109,32 @@ while True:
                 command = command.split()
                 if command[0] == "LINKDOWN":
                     command_ip = command[1] # IP address
-                    command_ip = int(command[2]) # Port
-                    # send linkdown message to neighbor
-                    # update neighbor's distance vector to infinity
-                    print "Linkdown"
+                    command_port = int(command[2]) # Port
+                    node = node(command_ip, command_port)
+                    if node in neighbors:
+                        dv[node] = float("inf")
+                        linked_down_nodes[node] = dv[node]
+                    # remove node from list of neighbors
+                    for node in linked_down_nodes:
+                        del neighbors[node]
+                    else:
+                        print "Node is not a neighbor, can't Linkdown"
+                        ROUTE_UPDATE()
+                        # send linkdown message to neighbor
+                        LINK_DOWN(node)
+                        # update neighbor's distance vector to infinity
                 elif command[0] == "LINKUP":
                     command_ip = command[1] # IP address
                     command_ip = int(command[2]) # Port
-                    print "Linkup"
+                    node = node(command_ip, command_port)
+                    if node not in neighbors:
+                        #add it back to neighbors
+                        neighbors[node] = time.time()
+                        #change dv
+                        if node in dv:
+                            dv[node] = linked_down_nodes[node]
+                        # send linkup message to neighbor
+                        LINK_UP(node)
                 elif command[0] == "CLOSE":
                     s.close()
                     exit()
@@ -133,9 +159,22 @@ while True:
                     while(counter < size_of_dv+3):
                         new_dv[data[counter], data[counter+1]] = data[counter+2] # ip address, port, weight
                         counter += 3
+
+
+                    # check to see if any of the weights in the route update are shorter or an infinite weight
+                    # if they are, then update the dv with the new weight
+                    for node in new_dv:
+                        if node in dv:
+                            if dv[node] == float("inf") and new_dv[node] != float("inf"):
+                                dv[node] = new_dv
+                            elif new_dv[node] < dv[node]:
+                                dv[node] = new_dv[node]
+                        else:
+                            # check to see if there is a node that is not yet in the dv
+                            # if there isn't then add it
+                            dv[node] = new_dv[node]
                     print "NEW DV: "
                     print new_dv
-
                 # s.send(data)
                 elif data[0] == "CLOSE":
                     print "CLOSE"
