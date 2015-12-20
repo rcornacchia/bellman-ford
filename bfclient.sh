@@ -15,6 +15,6 @@ osascript -e 'tell app "Terminal"
     do script with command "echo port 2 && python ~/code/python/bellman-ford/bfclient.py '$port2' 10 160.39.231.6 '$port1' 5 160.39.231.6 '$port3' 5" in window 4
 end tell'
 sleep 10
-echo port 4 && python ~/code/python/bellman-ford/bfclient.py $port4 10 160.39.231.6 $port2 5
+echo port 4 && python ~/code/python/bellman-ford/bfclient.py $port4 10 160.39.231.6 $port2 7
 
 # python ~/code/python/bellman-ford/bfclient.py $port2 10 160.39.231.6 $port1 10 160.39.231.6 $port3 5
