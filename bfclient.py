@@ -35,6 +35,7 @@ while(next_arg/3 <= number_neighbors):
     predecessor[neighbor] = neighbor
     neighbors[neighbor] = start
     next_arg += 3
+    # print dv
 #=====MESSAGES========================================================
 # function that sends distance vector to neighbors
 def ROUTE_UPDATE():
@@ -42,8 +43,11 @@ def ROUTE_UPDATE():
     # message will be ROUTE_UPDATE + ip + port + dv
     msg = "ROUTE_UPDATE" + " " + source[0] + " " + str(source[1]) + " "
     for v in dv:
-        msg += str(v[0]) + " " + str(v[1]) + " " + str(dv[v])
-    msg += " EOT"
+        # print "DV v"
+        # print str(dv[v])
+        msg += str(v[0]) + " " + str(v[1]) + " " + str(dv[v]) + " "
+    msg += "EOT"
+    # print "MESSAGE:" + msg
     # iterate through list of neighbors
     for neighbor in neighbors:
         # send message to each neighbor
@@ -82,6 +86,7 @@ class myThread (threading.Thread):
             for neighbor in neighbors:
                 if(now - neighbors[neighbor] > timeout * 3):
                     # remove neighbor
+                    print "REMOVING DEACTIVATED NEIGHBOR"
                     nodes_to_remove.append(neighbor)
             for node in nodes_to_remove:
                 dv[node] = float("inf")
@@ -114,9 +119,9 @@ while nodeActive:
             #     input.append(client)
             if s == sys.stdin:
                 command = sys.stdin.readline()
-                print command
+                # print command
                 command = command.split()
-                print command[0]
+                # print command[0]
                 if command[0] == "LINKDOWN":
                 #TODO RETURNand len(command) > 2:
 
@@ -127,7 +132,7 @@ while nodeActive:
                     command_port = neighbor_port
                     node = (command_ip, command_port)
                     if node in neighbors:
-                        print "Neighbor"
+                        # print "Neighbor"
                         dv[node] = float("inf")
                         linked_down_nodes[node] = dv[node]
                     else:
@@ -160,6 +165,12 @@ while nodeActive:
                 elif command[0] == "CLOSE":
                     print "Node shutting down"
                     nodeActive = False
+                elif command[0] == "SHOW_RT":
+                    now = time.strftime("%H:%M:%S", time.localtime(time.time()))
+                    print str(now) + "\tDistance vector list is: "
+                    for node in dv:
+                        print "Destination=" + node[0] + ":" + str(node[1]) + "\tCost=" + dv[node]
+
                 else:
                     print command[0] + "Command not recognized"
             else:
@@ -169,14 +180,15 @@ while nodeActive:
                 # print "Received Message: "
                 # print data
                 data = data.split()
+                # print data
                 # when receiving distance vector, check to see if there are any nodes that
                 # are not in current dv. If there's a new node, add it to dv and send ROUTE_UPDATE
                 if data[0] == "ROUTE_UPDATE":
-                    temp_ip = data[1]
-                    temp_port = int(data[2])
-                    # print temp_ip
-                    # print temp_port
-                    sender = temp_ip, temp_port # sender ip, port
+                    sender_ip = data[1]
+                    sender_port = int(data[2])
+                    # print sender_ip
+                    # print sender_port
+                    sender = sender_ip, sender_port # sender ip, port
                     neighbors[sender] = time.time()
                     size_of_dv = len(data[3:])/3
                     counter = 3
@@ -187,18 +199,21 @@ while nodeActive:
                     # check to see if any of the weights in the route update are shorter or an infinite weight
                     # if they are, then update the dv with the new weight
                     for node in new_dv:
-                        if node in dv:
-                            if dv[node] == float("inf") and new_dv[node] != float("inf"):
-                                dv[node] = new_dv
-                                predecessor[node] = [temp_ip, temp_port]
-                            elif new_dv[node] < dv[node]:
+                        print node
+                        if node[0] != my_ip and node[1] != my_port:
+                            if node in dv:
+                                if dv[node] == float("inf") and new_dv[node] != float("inf"):
+                                    dv[node] = new_dv
+                                    predecessor[node] = [sender_ip, sender_port]
+                                elif new_dv[node] < dv[node]:
+                                    print "REWRITING NODE"
+                                    dv[node] = new_dv[node]
+                                    predecessor[node] = [sender_ip, sender_port]
+                            elif node not in dv:
+                                # check to see if there is a node that is not yet in the dv
+                                # if there isn't then add it
                                 dv[node] = new_dv[node]
-                                predecessor[node] = [temp_ip, temp_port]
-                        else:
-                            # check to see if there is a node that is not yet in the dv
-                            # if there isn't then add it
-                            dv[node] = new_dv[node]
-                            predecessor[node] = [temp_ip, temp_port]
+                                predecessor[node] = [sender_ip, sender_port]
                     # print "NEW DV: "
                     # print new_dv
                 # elif data[0] == "CLOSE":
@@ -220,9 +235,6 @@ while nodeActive:
                     del neighbors[sender]
                     ROUTE_UPDATE
                     print "LINK DEACTIVATED"
-                # elif data[0] == "SHOW_RT":
-                #     sender = (data[1], int(data[2])) # sender ip, port
-                #     print "SHOW_RT"
                 elif data[0] is not None:
                     print "Unrecognized message received: "
                     print data
