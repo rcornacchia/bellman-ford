@@ -4,16 +4,16 @@ import select
 from collections import namedtuple
 import threading
 import time
-import os
 
 time_since_last_message = time.time()
 my_ip = socket.gethostbyname(socket.gethostname())
-node = namedtuple("node", ["ip", "port"])
+# node = namedtuple("node", ["ip", "port"])
 my_port = int(sys.argv[1])      # port number
 timeout = int(sys.argv[2])      # timeout
 dv = {}                         # dictionary for distance vector
 predecessor = {}                # dictionary to store the link with the lowest route
 neighbors = {}                  # dictionary to hold neighbors and time since last message from them
+neighbor_distance = {}
 linked_down_nodes = {}          # dictionary for linked_down_nodes, so I can keep track of neighbors when they're linked down and restore them as neighbors when they're linked up
 deactivated_links = {}          # dictionary for nodes that have sent a LINKED_DOWN msg to me, so I can restore when I get a linkup
 next_arg = 3                    # arguments after argv[2] come in triplets
@@ -30,31 +30,37 @@ while(next_arg/3 <= number_neighbors):
     neighbor_ip = sys.argv[next_arg]                    # ip address
     neighbor_port = int(sys.argv[next_arg + 1])         # port number
     neighbor_weight = sys.argv[next_arg + 2]            # weight
-    neighbor = (neighbor_ip, neighbor_port)         # add neighbor to list of neighbors
+    neighbor = (neighbor_ip, neighbor_port)             # add neighbor to list of neighbors
     dv[neighbor] = neighbor_weight
+    neighbor_distance[neighbor] = neighbor_weight
     predecessor[neighbor] = neighbor
     neighbors[neighbor] = start
     next_arg += 3
-    # print dv
 #=====MESSAGES========================================================
 # function that sends distance vector to neighbors
 def ROUTE_UPDATE():
     # print "Sending Route Update"
-    # message will be ROUTE_UPDATE + ip + port + dv
-    msg = "ROUTE_UPDATE" + " " + source[0] + " " + str(source[1]) + " "
-    for v in dv:
-        # print "DV v"
-        # print str(dv[v])
-        msg += str(v[0]) + " " + str(v[1]) + " " + str(dv[v]) + " "
-    msg += "EOT"
+    # message will be ROUTE_UPDATE + ip + port + weight + dv
+
     # print "MESSAGE:" + msg
     # iterate through list of neighbors
     for neighbor in neighbors:
-        # send message to each neighbor
-        sending_socket.sendto(msg, (neighbor[0], neighbor[1]))
-        #reset timer
-        time_since_last_message = time.time()
-        # message should include the port number from the source
+        msg = None
+        if neighbor_distance.has_key(neighbor):
+            msg = "ROUTE_UPDATE" + " " + my_ip + " " + str(my_port) + " " + neighbor_distance[neighbor] + " "
+        for v in dv:
+            # print "DV v"
+            # print str(dv[v])
+            if msg is None:
+                msg = "ROUTE_UPDATE "
+            msg += str(v[0]) + " " + str(v[1]) + " " + str(dv[v]) + " "
+        if msg is not None:
+            msg += "EOT"
+            # send message to each neighbor
+            sending_socket.sendto(msg, (neighbor[0], neighbor[1]))
+            #reset timer
+            time_since_last_message = time.time()
+            # message should include the port number from the source
 #====================================================================
 def LINK_DOWN(node):
     print "SENDING LINKDOWN"
@@ -65,6 +71,12 @@ def LINK_UP(node):
     print "SENDING LINKUP"
     msg = "LINKUP" + " " + source[0] + " " + str(source[1]) + " "
     sending_socket.sendto(msg, (node[0], node[1]))
+#====================================================================
+def SHOW_RT():
+    now = time.strftime("%H:%M:%S", time.localtime(time.time()))
+    print str(now) + "\tDistance vector list is: "
+    for node in dv:
+        print "Destination=" + node[0] + ":" + str(node[1]) + "\tCost=" + str(dv[node])
 #====================================================================
 # thread function --> checks time to see if it has been more than timeout since last message
 # if it has been, then add message to write, so that select will be called
@@ -109,6 +121,8 @@ receiving_socket.bind((my_ip, my_port))
 input = [receiving_socket, sys.stdin]
 output = [sys.stdin]
 #====================================================================
+time.sleep(1)
+ROUTE_UPDATE()
 while nodeActive:
     try:
         inputready,outputready,exceptready = select.select(input,[],[])
@@ -119,12 +133,9 @@ while nodeActive:
             #     input.append(client)
             if s == sys.stdin:
                 command = sys.stdin.readline()
-                # print command
                 command = command.split()
-                # print command[0]
                 if command[0] == "LINKDOWN":
                 #TODO RETURNand len(command) > 2:
-
                     # command_ip = command[1] # IP address
                     # command_port = int(command[2]) # Port
                     # FOR TESTING PURPOSES TODO change back
@@ -166,11 +177,7 @@ while nodeActive:
                     print "Node shutting down"
                     nodeActive = False
                 elif command[0] == "SHOW_RT":
-                    now = time.strftime("%H:%M:%S", time.localtime(time.time()))
-                    print str(now) + "\tDistance vector list is: "
-                    for node in dv:
-                        print "Destination=" + node[0] + ":" + str(node[1]) + "\tCost=" + dv[node]
-
+                    SHOW_RT()
                 else:
                     print command[0] + "Command not recognized"
             else:
@@ -179,45 +186,52 @@ while nodeActive:
                 data = s.recv(1024)
                 # print "Received Message: "
                 # print data
+                SHOW_RT()
                 data = data.split()
+                # print data
                 # print data
                 # when receiving distance vector, check to see if there are any nodes that
                 # are not in current dv. If there's a new node, add it to dv and send ROUTE_UPDATE
                 if data[0] == "ROUTE_UPDATE":
                     sender_ip = data[1]
                     sender_port = int(data[2])
-                    # print sender_ip
-                    # print sender_port
                     sender = sender_ip, sender_port # sender ip, port
                     neighbors[sender] = time.time()
-                    size_of_dv = len(data[3:])/3
-                    counter = 3
+                    size_of_dv = len(data[2:])/3
+                    counter = 1
                     new_dv = {}
+                    if not neighbors.has_key(sender):
+                        neighbors[sender] = time.time()
+                        neighbor_distance[sender] = data[3]
+                        print "added neighbor"
                     while(counter < size_of_dv+3):
-                        new_dv[data[counter], data[counter+1]] = data[counter+2] # ip address, port, weight
+                        new_dv[data[counter], int(data[counter+1])] = data[counter+2] # ip address, port, weight
                         counter += 3
                     # check to see if any of the weights in the route update are shorter or an infinite weight
-                    # if they are, then update the dv with the new weight
                     for node in new_dv:
-                        print node
-                        if node[0] != my_ip and node[1] != my_port:
-                            if node in dv:
-                                if dv[node] == float("inf") and new_dv[node] != float("inf"):
-                                    dv[node] = new_dv
+                        if str(node[0]) != str(my_ip) or str(node[1]) != str(my_port):
+                                if dv.has_key(node):
+                                    # if distance to neighbor + neighbor distance to node < my distance to node, replace my distance to node with my neighbor and record that as predecessor
+                                    if dv[node] == float("inf") and new_dv[node] != float("inf"):
+                                        dv[node] = new_dv[node]
+                                        predecessor[node] = [sender_ip, sender_port]
+                                    if neighbors.has_key(sender):
+                                        if dv.has_key(sender):
+                                            if new_dv[sender] < dv[sender]:
+                                                dv[sender] = new_dv[sender]
+                                        else:
+                                            dv[sender] = new_dv[sender]
+                                    elif neighbor_distance[sender] + new_dv[node] < dv[node]:
+                                        print "REWRITING NODE"
+                                        del dv[node]
+                                        dv[node] = new_dv[node] + neighbor_distance[sender]
+                                        neighbor_weight = new_dv[node]
+                                        predecessor[node] = [sender_ip, sender_port]
+                                else:
+                                    print "else"
+                                    # node doesn't exist in routing table yet, add it
+                                    dv[node] = new_dv[node] + data[3]
                                     predecessor[node] = [sender_ip, sender_port]
-                                elif new_dv[node] < dv[node]:
-                                    print "REWRITING NODE"
-                                    dv[node] = new_dv[node]
-                                    predecessor[node] = [sender_ip, sender_port]
-                            elif node not in dv:
-                                # check to see if there is a node that is not yet in the dv
-                                # if there isn't then add it
-                                dv[node] = new_dv[node]
-                                predecessor[node] = [sender_ip, sender_port]
-                    # print "NEW DV: "
-                    # print new_dv
-                # elif data[0] == "CLOSE":
-                #     print "CLOSE"
                 elif data[0] == "LINKUP":
                     print "LINKUP"
                     sender = (data[1], int(data[2])) # sender ip, port
