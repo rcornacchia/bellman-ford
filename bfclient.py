@@ -160,7 +160,7 @@ input = [receiving_socket, sys.stdin]
 output = [sys.stdin]
 #====================================================================
 time.sleep(1)
-ROUTE_UPDATE()
+# ROUTE_UPDATE()
 while nodeActive:
     try:
         inputready,outputready,exceptready = select.select(input,[],[])
