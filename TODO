@@ -1,6 +1,6 @@
-have 2 clients connecting and updating each other
-    on update, change the timestamp since the last message for the neighbors, so they're not removed
 implement bellman-ford updating
-implement commands
 describe protocol in README
+reset timeout
 %> command prompt
+# don't need to detect cycles
+# check to see if any of the weights in the route update are shorter or an infinite weight
