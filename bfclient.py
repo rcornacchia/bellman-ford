@@ -92,7 +92,7 @@ def LINK_DESTROYED(broken_node, target_node):
 # thread function --> checks time to see if it has been more than timeout since last message
 # if it has been, then add message to write, so that select will be called
 # Function also tests to see if neighbors have been not messaged in 3 * timeout seconds
-def run(self):
+def run(self, delay):
     time_since_last_message = time.time()
     while nodeActive:
         # print "Thread started"
@@ -135,6 +135,7 @@ def run(self):
                     #     predecessor[key] = "no link exists"
             # del neighbors[node]
             ROUTE_UPDATE()
+
         # Check to see if last message sent is inside the timeout window
         if (now - time_since_last_message > timeout):
             time_since_last_message = time.time()
@@ -142,7 +143,7 @@ def run(self):
         time.sleep(1)
 #====================================================================
 # spawn thread to handle time checking
-thread.start_new_thread( run, ("thread1"))
+thread.start_new_thread( run, ("thread1", 2, ) )
 #====================================================================
 # Create two sockets
 sending_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
