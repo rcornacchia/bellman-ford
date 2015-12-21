@@ -142,7 +142,7 @@ def run(self):
         time.sleep(1)
 #====================================================================
 # spawn thread to handle time checking
-thread.start_new_thread( run, ("thread1", 2, ) )
+thread.start_new_thread( run, ("thread1"))
 #====================================================================
 # Create two sockets
 sending_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
